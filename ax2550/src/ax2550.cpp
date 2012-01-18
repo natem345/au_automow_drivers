@@ -24,11 +24,17 @@ AX2550::~AX2550() {
 void AX2550::connect() {
     try {
         // Configure the serial port
-        this->serial_port.setPort(this->port);
+        this->serial_port.setPort(this->port);/*
         this->serial_port.setBaudrate(9600);
         this->serial_port.setParity(serial::PARITY_EVEN);
         this->serial_port.setStopbits(serial::STOPBITS_ONE);
-        this->serial_port.setBytesize(serial::SEVENBITS);
+        this->serial_port.setBytesize(serial::SEVENBITS);*/
+
+        this->serial_port.setBaudrate(115200);
+        this->serial_port.setParity(serial::PARITY_NONE);
+        this->serial_port.setStopbits(serial::STOPBITS_ONE);
+        //this->serial_port.setStartbits(serial::STARTBITS_ONE); doesn't exist... unneeded?
+        this->serial_port.setBytesize(serial::EIGHTBITS);
         this->serial_port.setTimeoutMilliseconds(this->timeout);
         
         // Open the serial port
@@ -115,9 +121,16 @@ void AX2550::sync() {
         boost::this_thread::sleep(boost::posix_time::milliseconds(25));
     }
     
-    std::string temp = this->serial_port.read(1000);
-    if(temp.length() > 0 && temp.find("OK") != std::string::npos)
+this->serial_port.write("\x05\r");
+std::string temp = this->serial_port.read(1000);
+//printf("sent \x05\r, got back %s",temp);
+std::cout << "sent \x05, got back " << temp << "that\n";
+
+    if(temp.length() > 0 && temp.find("\x06") != std::string::npos)
         this->synced = true;
+    /*std::string temp = this->serial_port.read(1000);
+    if(temp.length() > 0 && temp.find("OK") != std::string::npos)
+        this->synced = true;*/
     
     if(!this->synced)
         throw(SynchonizationFailedException("Failed to get OK from motor controller."));
@@ -148,7 +161,62 @@ bool AX2550::move(double speed, double direction) {
     while(temp.length() != 0)
         temp = this->serial_port.read(1000);;
     this->serial_port.setTimeoutMilliseconds(this->timeout);
+
+char *serial_buffer = new char[10];
     
+    unsigned char speed_hex, direction_hex;
+    
+    speed_hex = (unsigned char) (fabs(speed));// * 127);
+    if(speed < 0)
+        sprintf(serial_buffer, "!M  -%.2X 0\r", speed_hex);
+    else
+        sprintf(serial_buffer, "!M   %.2X 0\r", speed_hex);
+    this->serial_port.write(serial_buffer, 10);
+    
+    // Read the echoed message
+    temp = this->serial_port.read(10);
+    this->isRCMessage(temp);
+    if(temp != std::string(serial_buffer)) {
+        this->error("Error sending move command, speed was not properly echoed.");
+        result = false;
+    }
+    
+    // Read the command result (+ or -)
+    temp = this->serial_port.read(2);
+    this->isRCMessage(temp);
+    if(temp != "+\r") {
+        this->error("Error sending move command, NAK received on speed.");
+        result = false;
+    }
+    
+    delete[] serial_buffer;
+    serial_buffer = new char[10];
+    
+    direction_hex = (unsigned char) (fabs(direction));// * 127);
+    if(direction < 0)
+        sprintf(serial_buffer, "!M 0  -%.2X\r", direction_hex);
+    else
+        sprintf(serial_buffer, "!M 0   %.2X\r", direction_hex);
+    
+    this->serial_port.write(serial_buffer, 10);
+    
+    // Read the echoed message
+    temp = this->serial_port.read(10);
+    this->isRCMessage(temp);
+    if(temp != std::string(serial_buffer)) {
+        this->error("Error sending move command, direction was not properly echoed.");
+        result = false;
+    }
+    
+    // Read the command result (+ or -)
+    temp = this->serial_port.read(2);
+    this->isRCMessage(temp);
+    if(temp != "+\r") {
+        this->error("Error sending move command, NAK received on direction.");
+        result = false;
+    }
+
+    /*
     char *serial_buffer = new char[5];
     
     unsigned char speed_hex, direction_hex;
@@ -202,7 +270,7 @@ bool AX2550::move(double speed, double direction) {
         this->error("Error sending move command, NAK received on direction.");
         result = false;
     }
-    
+    */
     return result;
 }
 

@@ -71,7 +71,8 @@ void cmd_velCallback(const geometry_msgs::Twist::ConstPtr& msg) {
     
     // ROS_INFO("%f %f", A_rel, B_rel);
     
-    mc->move(A_rel, B_rel);
+    mc->move(A,B);
+    //mc->move(A_rel, B_rel);
 }
 
 void errorMsgCallback(const std::string &msg) {

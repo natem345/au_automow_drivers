@@ -1,3 +1,0 @@
-version 2.3.1
-
-Latest changes: updated for Arduino 1.0
